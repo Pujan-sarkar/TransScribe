@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from "react";
 const HomePage = (props) => {
   const { setAudioStream, setFile } = props;
 
-  // Correctly initialize state variables using array destructuring
+  
   const [recordingStatus, setRecordingStatus] = useState("inactive");
   const [audioChunks, setAudioChunks] = useState([]);
   const [duration, setDuration] = useState(0);
@@ -73,7 +73,9 @@ const HomePage = (props) => {
       </h3>
 
       <button
-        onClick={recordingStatus === "recording" ? stopRecording : startRecording}
+        onClick={
+          recordingStatus === "recording" ? stopRecording : startRecording
+        }
         className="flex specialbutton px-4 py-4 rounded-xl items-center text-base justify-between gap-4 mx-auto w-72 max-w-full my-4"
       >
         <p className="text-blue-400">
@@ -83,7 +85,7 @@ const HomePage = (props) => {
           {duration !== 0 && <p className="text-sm">{duration}s</p>}
           <i
             className={
-              "fa-solid duration-300 fa-microphone" +
+              "fa-solid duration-200 fa-microphone" +
               (recordingStatus === "recording" ? " text-rose-300" : "")
             }
           ></i>
