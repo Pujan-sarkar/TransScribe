@@ -1,9 +1,7 @@
-import React from 'react'
+import React from "react";
 
-const Transcription = () => {
-  return (
-    <div>Transcription</div>
-  )
+export default function Transcription(props) {
+  const { textElement } = props;
+
+  return <div>( textElement )</div>;
 }
-
-export default Transcription

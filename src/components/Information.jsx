@@ -2,8 +2,32 @@ import React, { useState } from "react";
 import Transcription from "./Transcription";
 import Translation from "./Translation";
 
-export default function Information() {
+export default function Information(props) {
+  const { output } = props;
   const [tab, setTab] = useState("transcription");
+  const [translate, setTranslate] = useState("null");
+  const [toLanguage, setToLanguage] = useState("null");
+  const [translating, setTranslating] = useState("null");
+  console.log(output);
+
+  function handleCopy() {
+    navigator.clipboard.writeText();
+  }
+
+  function handleDownload() {
+    const element = document.createElement("a");
+    const file = new Blob([], { type: "text/plain" });
+    element.href = URL.createObjectURL(file);
+    element.download(`Transcribe_${new Date().toDateString()}.txt`);
+    document.body.appendChild(element);
+    element.click();
+  }
+
+  function klk (){
+
+  }
+
+  const textElement = tab === 'transcription' ? output.map((val) => val.text): ''
 
   return (
     <div>
@@ -16,7 +40,7 @@ export default function Information() {
           <button
             onClick={() => setTab("transcription")}
             className={
-              "px-4 duration-200 py-1 font-medium " +
+              "px-4 duration-200 py-1  " +
               (tab === "transcription"
                 ? "bg-blue-400 text-white"
                 : "text-blue-400 hover:text-blue-600")
@@ -36,7 +60,29 @@ export default function Information() {
             Translation
           </button>
         </div>
-        {tab === "transcription" ? <Transcription /> : <Translation />}
+        <div className="my-8 flex flex-col">
+          {tab === "transcription" ? (
+            <Transcription {...props}  textElement ={ textElement }/>
+          ) : (
+            <Translation {...props} toLanguage={toLanguage} 
+            translating = {translating} Translation = {translation} setTranslating={setTranslating} setToLanguage={setToLanguage}/>
+          )}
+        </div>
+
+        <div className="flex items-center gap-4 mx-auto">
+          <button
+            title="copy"
+            className="bg-white hover:text-blue-500 duration-200 text-blue-300 px-2 aspect-square grid place-items-center rounded"
+          >
+            <i class="fa-solid fa-copy"></i>
+          </button>
+          <button
+            title="download"
+            className="bg-white hover:text-blue-500 duration-200 text-blue-300 px-2 aspect-square grid place-items-center rounded"
+          >
+            <i class="fa-solid fa-download"></i>
+          </button>
+        </div>
       </main>
     </div>
   );

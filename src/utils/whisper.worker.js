@@ -1,4 +1,4 @@
-import { pipeline, Pipeline } from "@xenova/transformers";
+import { pipeline } from "@xenova/transformers";
 import { MessageTypes } from "./presets";
 
 class MyTranscriptionPipeline {
@@ -8,11 +8,10 @@ class MyTranscriptionPipeline {
 
   static async getInstance(progress_callback = null) {
     if (this.instance === null) {
-      this.instance = await pipeline(this.task, null, {
+      this.instance = await pipeline(this.task, this.model, {
         progress_callback,
       });
     }
-
     return this.instance;
   }
 }
@@ -31,8 +30,14 @@ async function transcribe(audio) {
 
   try {
     pipeline = await MyTranscriptionPipeline.getInstance(load_model_callback);
-  } catch (error) {
-    console.log(error.message);
+  } catch (err) {
+    console.error("Error initializing pipeline:", err.message);
+    return;
+  }
+
+  if (!pipeline) {
+    console.error("Failed to initialize pipeline. Exiting transcription.");
+    return;
   }
 
   sendLoadingMessage("success");
@@ -45,20 +50,19 @@ async function transcribe(audio) {
     do_sample: false,
     chunk_length: 30,
     stride_length_s,
-    return_timestamp: true,
+    return_timestamps: true,
     callback_function:
       generationTracker.callbackFunction.bind(generationTracker),
     chunk_callback: generationTracker.chunkCallback.bind(generationTracker),
   });
-
   generationTracker.sendFinalResult();
 }
 
 async function load_model_callback(data) {
   const { status } = data;
-  if (status == "progress") {
+  if (status === "progress") {
     const { file, progress, loaded, total } = data;
-    sendLoadingMessage(file, progress, loaded, total);
+    sendDownloadingMessage(file, progress, loaded, total);
   }
 }
 
@@ -81,11 +85,17 @@ async function sendDownloadingMessage(file, progress, loaded, total) {
 
 class GenerationTracker {
   constructor(pipeline, stride_length_s) {
+    if (!pipeline || !pipeline.processor || !pipeline.model) {
+      throw new Error(
+        "Pipeline or its dependencies are not initialized correctly."
+      );
+    }
+
     this.pipeline = pipeline;
     this.stride_length_s = stride_length_s;
     this.chunks = [];
     this.time_precision =
-      pipeline?.processor.feature_extractor.config.chunk_length /
+      pipeline.processor.feature_extractor.config.chunk_length /
       pipeline.model.config.max_source_positions;
     this.processed_chunks = [];
     this.callbackFunctionCounter = 0;
@@ -95,11 +105,16 @@ class GenerationTracker {
     self.postMessage({ type: MessageTypes.INFERENCE_DONE });
   }
 
-  callbackFunction(beans) {
+  callbackFunction(beams) {
     this.callbackFunctionCounter += 1;
-    if (this.callbackFunctionCounter % 10 != 0) {
+    if (this.callbackFunctionCounter % 10 !== 0) {
       return;
     }
+
+    const bestBeam = beams[0];
+    let text = this.pipeline.tokenizer.decode(bestBeam.output_token_ids, {
+      skip_special_tokens: true,
+    });
 
     const result = {
       text,
@@ -109,6 +124,7 @@ class GenerationTracker {
 
     createPartialResultMessage(result);
   }
+
   chunkCallback(data) {
     this.chunks.push(data);
     const [text, { chunks }] = this.pipeline.tokenizer._decode_asr(
@@ -121,7 +137,7 @@ class GenerationTracker {
     );
 
     this.processed_chunks = chunks.map((chunk, index) => {
-      return this.processed_chunks(chunk, index);
+      return this.processChunk(chunk, index);
     });
 
     createResultMessage(
@@ -132,9 +148,10 @@ class GenerationTracker {
   }
 
   getLastChunkTimestamp() {
-    if (this.processed_chunks.length == 0) {
+    if (this.processed_chunks.length === 0) {
       return 0;
     }
+    return this.processed_chunks[this.processed_chunks.length - 1].end || 0;
   }
 
   processChunk(chunk, index) {
@@ -145,17 +162,17 @@ class GenerationTracker {
       index,
       text: `${text.trim()}`,
       start: Math.round(start),
-      end: Math.end(end) || Math.round(start + 0.9 * this.stride_length_s),
+      end: Math.round(end) || Math.round(start + 0.9 * this.stride_length_s),
     };
   }
 }
 
-function createResultMessage(results, isDone, completeUntilTimestamp) {
+function createResultMessage(results, isDone, completedUntilTimestamp) {
   self.postMessage({
     type: MessageTypes.RESULT,
     results,
     isDone,
-    completeUntilTimestamp,
+    completedUntilTimestamp,
   });
 }
 
