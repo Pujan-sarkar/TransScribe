@@ -1,16 +1,26 @@
-import { pipeline } from "@xenova/transformers";
+import { HfInference } from "@huggingface/inference";
 import { MessageTypes } from "./presets";
 
 class MyTranscriptionPipeline {
   static task = "automatic-speech-recognition";
   static model = "openai/whisper-tiny.en";
+  static inference = new HfInference(); // Initialize Hugging Face Inference
   static instance = null;
 
-  static async getInstance(progress_callback = null) {
+  static async getInstance() {
     if (this.instance === null) {
-      this.instance = await pipeline(this.task, this.model, {
-        progress_callback,
-      });
+      try {
+        console.log("Initializing Hugging Face Whisper Pipeline...");
+        this.instance = {
+          task: this.task,
+          model: this.model,
+          inference: this.inference,
+        };
+        console.log("Pipeline successfully initialized.");
+      } catch (err) {
+        console.error("Failed to initialize pipeline:", err.message);
+        throw new Error("Pipeline initialization failed");
+      }
     }
     return this.instance;
   }
@@ -26,43 +36,31 @@ self.addEventListener("message", async (event) => {
 async function transcribe(audio) {
   sendLoadingMessage("loading");
 
-  let pipeline;
+  let pipelineInstance;
 
   try {
-    pipeline = await MyTranscriptionPipeline.getInstance(load_model_callback);
+    pipelineInstance = await MyTranscriptionPipeline.getInstance();
+    if (!pipelineInstance) {
+      throw new Error("Pipeline instance is undefined.");
+    }
   } catch (err) {
-    console.error("Error initializing pipeline:", err.message);
-    return;
-  }
-
-  if (!pipeline) {
-    console.error("Failed to initialize pipeline. Exiting transcription.");
+    console.error("Error loading pipeline:", err.message);
+    sendLoadingMessage("error");
     return;
   }
 
   sendLoadingMessage("success");
 
-  const stride_length_s = 5;
+  try {
+    const result = await pipelineInstance.inference.automaticSpeechRecognition({
+      model: pipelineInstance.model,
+      audio,
+    });
 
-  const generationTracker = new GenerationTracker(pipeline, stride_length_s);
-  await pipeline(audio, {
-    top_k: 0,
-    do_sample: false,
-    chunk_length: 30,
-    stride_length_s,
-    return_timestamps: true,
-    callback_function:
-      generationTracker.callbackFunction.bind(generationTracker),
-    chunk_callback: generationTracker.chunkCallback.bind(generationTracker),
-  });
-  generationTracker.sendFinalResult();
-}
-
-async function load_model_callback(data) {
-  const { status } = data;
-  if (status === "progress") {
-    const { file, progress, loaded, total } = data;
-    sendDownloadingMessage(file, progress, loaded, total);
+    sendResult(result.transcription || "No transcription available.");
+  } catch (err) {
+    console.error("Error during transcription:", err.message);
+    sendLoadingMessage("error");
   }
 }
 
@@ -73,112 +71,9 @@ function sendLoadingMessage(status) {
   });
 }
 
-async function sendDownloadingMessage(file, progress, loaded, total) {
+function sendResult(text) {
   self.postMessage({
-    type: MessageTypes.DOWNLOADING,
-    file,
-    progress,
-    loaded,
-    total,
-  });
-}
-
-class GenerationTracker {
-  constructor(pipeline, stride_length_s) {
-    if (!pipeline || !pipeline.processor || !pipeline.model) {
-      throw new Error(
-        "Pipeline or its dependencies are not initialized correctly."
-      );
-    }
-
-    this.pipeline = pipeline;
-    this.stride_length_s = stride_length_s;
-    this.chunks = [];
-    this.time_precision =
-      pipeline.processor.feature_extractor.config.chunk_length /
-      pipeline.model.config.max_source_positions;
-    this.processed_chunks = [];
-    this.callbackFunctionCounter = 0;
-  }
-
-  sendFinalResult() {
-    self.postMessage({ type: MessageTypes.INFERENCE_DONE });
-  }
-
-  callbackFunction(beams) {
-    this.callbackFunctionCounter += 1;
-    if (this.callbackFunctionCounter % 10 !== 0) {
-      return;
-    }
-
-    const bestBeam = beams[0];
-    let text = this.pipeline.tokenizer.decode(bestBeam.output_token_ids, {
-      skip_special_tokens: true,
-    });
-
-    const result = {
-      text,
-      start: this.getLastChunkTimestamp(),
-      end: undefined,
-    };
-
-    createPartialResultMessage(result);
-  }
-
-  chunkCallback(data) {
-    this.chunks.push(data);
-    const [text, { chunks }] = this.pipeline.tokenizer._decode_asr(
-      this.chunks,
-      {
-        time_precision: this.time_precision,
-        return_timestamps: true,
-        force_full_sequence: false,
-      }
-    );
-
-    this.processed_chunks = chunks.map((chunk, index) => {
-      return this.processChunk(chunk, index);
-    });
-
-    createResultMessage(
-      this.processed_chunks,
-      false,
-      this.getLastChunkTimestamp()
-    );
-  }
-
-  getLastChunkTimestamp() {
-    if (this.processed_chunks.length === 0) {
-      return 0;
-    }
-    return this.processed_chunks[this.processed_chunks.length - 1].end || 0;
-  }
-
-  processChunk(chunk, index) {
-    const { text, timestamp } = chunk;
-    const { start, end } = timestamp;
-
-    return {
-      index,
-      text: `${text.trim()}`,
-      start: Math.round(start),
-      end: Math.round(end) || Math.round(start + 0.9 * this.stride_length_s),
-    };
-  }
-}
-
-function createResultMessage(results, isDone, completedUntilTimestamp) {
-  self.postMessage({
-    type: MessageTypes.RESULT,
-    results,
-    isDone,
-    completedUntilTimestamp,
-  });
-}
-
-function createPartialResultMessage(result) {
-  self.postMessage({
-    type: MessageTypes.RESULT_PARTIAL,
-    result,
+    type: MessageTypes.INFERENCE_DONE,
+    result: text,
   });
 }
