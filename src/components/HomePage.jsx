@@ -1,19 +1,20 @@
 import React, { useState, useEffect, useRef } from "react";
 
-const HomePage = (props) => {
+export default function HomePage(props) {
   const { setAudioStream, setFile } = props;
 
-  
   const [recordingStatus, setRecordingStatus] = useState("inactive");
   const [audioChunks, setAudioChunks] = useState([]);
   const [duration, setDuration] = useState(0);
 
   const mediaRecorder = useRef(null);
+
   const mimeType = "audio/webm";
 
   async function startRecording() {
     let tempStream;
-    console.log("Start Recording");
+    console.log("Start recording");
+
     try {
       const streamData = await navigator.mediaDevices.getUserMedia({
         audio: true,
@@ -26,15 +27,20 @@ const HomePage = (props) => {
     }
     setRecordingStatus("recording");
 
+    //create new Media recorder instance using the stream
     const media = new MediaRecorder(tempStream, { type: mimeType });
     mediaRecorder.current = media;
-    mediaRecorder.current.start();
 
+    mediaRecorder.current.start();
     let localAudioChunks = [];
     mediaRecorder.current.ondataavailable = (event) => {
-      if (event.data.size > 0) {
-        localAudioChunks.push(event.data);
+      if (typeof event.data === "undefined") {
+        return;
       }
+      if (event.data.size === 0) {
+        return;
+      }
+      localAudioChunks.push(event.data);
     };
     setAudioChunks(localAudioChunks);
   }
@@ -53,45 +59,47 @@ const HomePage = (props) => {
   }
 
   useEffect(() => {
-    if (recordingStatus === "inactive") return;
+    if (recordingStatus === "inactive") {
+      return;
+    }
 
     const interval = setInterval(() => {
       setDuration((curr) => curr + 1);
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [recordingStatus]);
+  });
 
   return (
-    <main className="flex-1 p-4 flex flex-col gap-3 text-center sm:gap-4 md:gap-5 justify-center pb-10 ">
-      <h1 className="font-semibold text-5xl sm:text-6xl">
-        Trans<span className="text-blue-400 bold">Script</span>
+    <main className="flex-1  p-4 flex flex-col gap-3 text-center sm:gap-4  justify-center pb-20">
+      <h1 className="font-semibold text-5xl sm:text-6xl md:text-7xl">
+        Free<span className="text-blue-400 bold">Scribe</span>
       </h1>
       <h3 className="font-medium md:text-lg">
-        Record<span className="text-blue-400">&rarr;</span>Transcribe
-        <span className="text-blue-400">&rarr;</span>Translate
+        Record <span className="text-blue-400">&rarr;</span> Transcribe{" "}
+        <span className="text-blue-400">&rarr;</span> Translate
       </h3>
-
       <button
         onClick={
           recordingStatus === "recording" ? stopRecording : startRecording
         }
-        className="flex specialbutton px-4 py-4 rounded-xl items-center text-base justify-between gap-4 mx-auto w-72 max-w-full my-4"
+        className="flex specialBtn px-4 py-2 rounded-xl items-center text-base justify-between gap-4 mx-auto w-72 max-w-full my-4"
       >
         <p className="text-blue-400">
-          {recordingStatus === "inactive" ? "Record" : `Stop Recording`}
+          {recordingStatus === "inactive" ? "Record" : `Stop recording`}
         </p>
         <div className="flex items-center gap-2">
-          {duration !== 0 && <p className="text-sm">{duration}s</p>}
+          {/* {duration !== 0 && (
+                        <p className='text-sm'>{duration}s</p>
+                    )} */}
           <i
             className={
-              "fa-solid duration-200 fa-microphone" +
+              "fa-solid duration-200 fa-microphone " +
               (recordingStatus === "recording" ? " text-rose-300" : "")
             }
           ></i>
         </div>
       </button>
-
       <p className="text-base">
         Or{" "}
         <label className="text-blue-400 cursor-pointer hover:text-blue-600 duration-200">
@@ -103,15 +111,12 @@ const HomePage = (props) => {
             }}
             className="hidden"
             type="file"
-            accept=".mp3, .wave"
+            accept=".mp3,.wave"
           />
-        </label>
-        an audio file
+        </label>{" "}
+        a mp3 file
       </p>
-
-      <p className="italic text-slate-400">Free For Always</p>
+      <p className="italic text-slate-400">Free now free forever</p>
     </main>
   );
-};
-
-export default HomePage;
+}

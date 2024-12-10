@@ -15,12 +15,13 @@ function App() {
   const [finished, setFinished] = useState(false);
 
   const isAudioAvailable = file || audioStream;
-  const worker = useRef(null);
 
   function handleAudioReset() {
     setFile(null);
     setAudioStream(null);
   }
+
+  const worker = useRef(null);
 
   useEffect(() => {
     if (!worker.current) {
@@ -32,7 +33,7 @@ function App() {
       );
     }
 
-    const onMessageReceived = (e) => {
+    const onMessageReceived = async (e) => {
       switch (e.data.type) {
         case "DOWNLOADING":
           setDownloading(true);
@@ -50,63 +51,45 @@ function App() {
           setFinished(true);
           console.log("DONE");
           break;
-        default:
-          console.warn("Unknown message type:", e.data.type);
-          break;
       }
     };
 
     worker.current.addEventListener("message", onMessageReceived);
 
-    return () => {
-      if (worker.current) {
-        worker.current.removeEventListener("message", onMessageReceived);
-        worker.current.terminate(); // Clean up worker
-        worker.current = null;
-      }
-    };
-  }, []);
+    return () =>
+      worker.current.removeEventListener("message", onMessageReceived);
+  });
 
-  async function readAudioForm(file) {
-    try {
-      const sampling_rate = 16000;
-      const audioCTX = new AudioContext({ sampleRate: sampling_rate });
-      const respond = await file.arrayBuffer(); // Corrected variable name
-      const decode = await audioCTX.decodeAudioData(respond); // Decode respond
-      const audio = decode.getChannelData(0); // Get audio data
-      return audio;
-    } catch (error) {
-      console.error("Error in readAudioForm:", error);
-      throw error;
-    }
+  async function readAudioFrom(file) {
+    const sampling_rate = 16000;
+    const audioCTX = new AudioContext({ sampleRate: sampling_rate });
+    const response = await file.arrayBuffer();
+    const decoded = await audioCTX.decodeAudioData(response);
+    const audio = decoded.getChannelData(0);
+    return audio;
   }
 
   async function handleFormSubmission() {
     if (!file && !audioStream) {
-      console.warn("No audio file or stream available for submission.");
       return;
     }
 
-    try {
-      let audio = await readAudioForm(file ? file : audioStream);
-      const model_name = `openai/whisper-tiny.en`;
+    let audio = await readAudioFrom(file ? file : audioStream);
+    const model_name = `openai/whisper-tiny.en`;
 
-      worker.current.postMessage({
-        type: MessageTypes.INFERENCE_REQUEST,
-        audio,
-        model_name,
-      });
-    } catch (error) {
-      console.error("Error during form submission:", error);
-    }
+    worker.current.postMessage({
+      type: MessageTypes.INFERENCE_REQUEST,
+      audio,
+      model_name,
+    });
   }
 
   return (
-    <div className="flex flex-col p-4 max-w-[1000px] mx-auto w-full">
+    <div className="flex flex-col max-w-[1000px] mx-auto w-full">
       <section className="min-h-screen flex flex-col">
         <Header />
         {output ? (
-          <Information output={output} />
+          <Information output={output} finished={finished} />
         ) : loading ? (
           <Transcribing />
         ) : isAudioAvailable ? (
@@ -114,13 +97,12 @@ function App() {
             handleFormSubmission={handleFormSubmission}
             handleAudioReset={handleAudioReset}
             file={file}
-            audioStream={setAudioStream}
+            audioStream={audioStream}
           />
         ) : (
           <HomePage setFile={setFile} setAudioStream={setAudioStream} />
         )}
       </section>
-      <h1 className="text-green-500">Hello World</h1>
       <footer></footer>
     </div>
   );
