@@ -73,7 +73,7 @@ export default function HomePage(props) {
   return (
     <main className="flex-1  p-4 flex flex-col gap-3 text-center sm:gap-4  justify-center pb-20">
       <h1 className="font-semibold text-5xl sm:text-6xl md:text-7xl">
-        Free<span className="text-blue-400 bold">Scribe</span>
+        Trans<span className="text-blue-400 bold">Script</span>
       </h1>
       <h3 className="font-medium md:text-lg">
         Record <span className="text-blue-400">&rarr;</span> Transcribe{" "}

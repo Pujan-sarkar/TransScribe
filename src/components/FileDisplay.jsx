@@ -34,7 +34,7 @@ export default function FileDisplay(props) {
       <div className="flex items-center justify-between gap-4">
         <button
           onClick={handleAudioReset}
-          className="text-slate-400 hover:text-blue-600 duration-200"
+          className="text-slate-700 hover:text-blue-600 duration-200"
         >
           Reset
         </button>
